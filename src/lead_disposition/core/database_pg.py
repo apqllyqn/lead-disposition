@@ -40,12 +40,9 @@ class PostgresDatabase:
         self._pool: asyncpg.Pool | None = None
 
     async def connect(self) -> None:
-        async def _init_connection(conn):
-            await conn.execute("SET search_path TO disposition, public")
-
         self._pool = await asyncpg.create_pool(
             self.settings.database_url, min_size=2, max_size=10,
-            init=_init_connection,
+            server_settings={"search_path": "disposition, public"},
         )
 
     async def close(self) -> None:
