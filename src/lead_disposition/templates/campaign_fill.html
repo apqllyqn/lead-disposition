@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Campaign Fill - Lead Disposition{% endblock %}
+{% block nav_fill %}bg-gray-700{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold text-gray-900 mb-6">Campaign Fill</h1>
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <!-- Form -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="text-sm font-semibold text-gray-700 mb-4">Fill Parameters</h3>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Campaign ID *</label>
+                <input type="text" id="campaignId" placeholder="e.g. camp_q1_saas" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Client ID *</label>
+                <select id="clientId" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                    <option value="">Select client...</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Channel</label>
+                <select id="channel" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                    <option value="email">Email</option>
+                    <option value="linkedin">LinkedIn</option>
+                    <option value="phone">Phone</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Volume *</label>
+                <input type="number" id="volume" value="100" min="1" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Title Keywords (comma-separated)</label>
+                <input type="text" id="titleKeywords" placeholder="VP, Director, Head of" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Fresh Ratio</label>
+                    <input type="number" id="freshRatio" value="0.7" min="0" max="1" step="0.1" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Max Per Company</label>
+                    <input type="number" id="maxPerCompany" value="3" min="1" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                </div>
+            </div>
+            <button onclick="runFill()" id="fillBtn" class="w-full bg-orange-500 hover:bg-orange-600 text-white py-2 rounded font-medium text-sm">
+                Fill Campaign
+            </button>
+        </div>
+    </div>
+
+    <!-- Results -->
+    <div class="bg-white rounded-lg shadow p-6" id="resultPanel" style="display:none">
+        <h3 class="text-sm font-semibold text-gray-700 mb-4">Fill Results</h3>
+        <div class="grid grid-cols-2 gap-3 mb-4" id="resultStats"></div>
+        <div id="resultWarnings" class="mb-4"></div>
+        <div class="max-h-96 overflow-y-auto">
+            <table class="w-full text-xs">
+                <thead class="text-left text-gray-500 uppercase sticky top-0 bg-white">
+                    <tr>
+                        <th class="px-2 py-1">Email</th>
+                        <th class="px-2 py-1">Title</th>
+                        <th class="px-2 py-1">Company</th>
+                    </tr>
+                </thead>
+                <tbody id="resultContacts" class="divide-y divide-gray-100"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadClients() {
+    const res = await fetch('/api/clients');
+    const data = await res.json();
+    const sel = document.getElementById('clientId');
+    data.items.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c; opt.textContent = c;
+        sel.appendChild(opt);
+    });
+}
+
+async function runFill() {
+    const btn = document.getElementById('fillBtn');
+    btn.disabled = true; btn.textContent = 'Filling...';
+
+    const keywords = document.getElementById('titleKeywords').value;
+    const body = {
+        campaign_id: document.getElementById('campaignId').value,
+        client_id: document.getElementById('clientId').value,
+        channel: document.getElementById('channel').value,
+        volume: parseInt(document.getElementById('volume').value),
+        title_keywords: keywords ? keywords.split(',').map(s => s.trim()).filter(Boolean) : [],
+        fresh_ratio: parseFloat(document.getElementById('freshRatio').value),
+        max_per_company: parseInt(document.getElementById('maxPerCompany').value),
+    };
+
+    try {
+        const res = await fetch('/api/campaign/fill', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+
+        const panel = document.getElementById('resultPanel');
+        panel.style.display = 'block';
+
+        if (!res.ok) {
+            const err = await res.json();
+            document.getElementById('resultStats').innerHTML = `<div class="col-span-2 text-red-600">${err.detail}</div>`;
+            return;
+        }
+
+        const r = await res.json();
+        document.getElementById('resultStats').innerHTML = `
+            <div class="bg-gray-50 rounded p-2"><div class="text-xs text-gray-500">Requested</div><div class="font-bold">${r.total_requested}</div></div>
+            <div class="bg-gray-50 rounded p-2"><div class="text-xs text-gray-500">Assigned</div><div class="font-bold text-green-600">${r.total_assigned}</div></div>
+            <div class="bg-gray-50 rounded p-2"><div class="text-xs text-gray-500">Fresh</div><div class="font-bold">${r.fresh_count}</div></div>
+            <div class="bg-gray-50 rounded p-2"><div class="text-xs text-gray-500">Retouch</div><div class="font-bold">${r.retouch_count}</div></div>
+            <div class="bg-gray-50 rounded p-2"><div class="text-xs text-gray-500">Companies</div><div class="font-bold">${r.companies_touched}</div></div>
+        `;
+
+        const warnings = document.getElementById('resultWarnings');
+        warnings.innerHTML = r.warnings.length
+            ? r.warnings.map(w => `<div class="text-xs text-amber-600 bg-amber-50 p-2 rounded mb-1">${w}</div>`).join('')
+            : '';
+
+        document.getElementById('resultContacts').innerHTML = r.contacts.map(c => `
+            <tr>
+                <td class="px-2 py-1 font-mono">${c.email}</td>
+                <td class="px-2 py-1">${c.last_known_title || '-'}</td>
+                <td class="px-2 py-1">${c.last_known_company || c.company_domain}</td>
+            </tr>
+        `).join('');
+    } finally {
+        btn.disabled = false; btn.textContent = 'Fill Campaign';
+    }
+}
+
+loadClients();
+</script>
+{% endblock %}

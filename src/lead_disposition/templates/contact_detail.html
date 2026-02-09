@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}{{ contact.email }} - Lead Disposition{% endblock %}
+{% block nav_contacts %}bg-gray-700{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="/contacts" class="text-sm text-gray-500 hover:text-gray-700">&larr; Back to Contacts</a>
+</div>
+
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <div class="flex items-center justify-between mb-4">
+        <div>
+            <h1 class="text-xl font-bold text-gray-900">{{ contact.first_name or '' }} {{ contact.last_name or '' }}</h1>
+            <p class="text-sm text-gray-500 font-mono">{{ contact.email }}</p>
+        </div>
+        <span class="px-3 py-1 rounded-full text-sm font-medium
+            {% if contact.disposition_status.value == 'fresh' %}bg-green-100 text-green-800
+            {% elif contact.disposition_status.value == 'in_sequence' %}bg-blue-100 text-blue-800
+            {% elif contact.disposition_status.value in ['replied_hard_no','bounced','unsubscribed'] %}bg-red-100 text-red-800
+            {% elif contact.disposition_status.value == 'replied_positive' %}bg-emerald-100 text-emerald-800
+            {% elif contact.disposition_status.value == 'retouch_eligible' %}bg-yellow-100 text-yellow-800
+            {% elif contact.disposition_status.value == 'won_customer' %}bg-teal-100 text-teal-800
+            {% else %}bg-gray-100 text-gray-800{% endif %}">
+            {{ contact.disposition_status.value }}
+        </span>
+    </div>
+
+    <!-- Details Grid -->
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-3 text-sm">
+        <div><span class="text-gray-400">Title:</span> <span class="text-gray-900">{{ contact.last_known_title or '-' }}</span></div>
+        <div><span class="text-gray-400">Company:</span> <span class="text-gray-900">{{ contact.last_known_company or '-' }}</span></div>
+        <div><span class="text-gray-400">Domain:</span> <span class="text-gray-900 font-mono">{{ contact.company_domain }}</span></div>
+        <div><span class="text-gray-400">Client:</span> <span class="text-gray-900">{{ contact.client_id }}</span></div>
+        <div><span class="text-gray-400">Sequences:</span> <span class="text-gray-900">{{ contact.sequence_count }}</span></div>
+        <div><span class="text-gray-400">Source:</span> <span class="text-gray-900">{{ contact.source_system or '-' }}</span></div>
+
+        <div class="col-span-3 border-t pt-3 mt-1"></div>
+
+        <div><span class="text-gray-400">Email Suppressed:</span>
+            <span class="{{ 'text-red-600 font-medium' if contact.email_suppressed else 'text-green-600' }}">{{ 'Yes' if contact.email_suppressed else 'No' }}</span></div>
+        <div><span class="text-gray-400">LinkedIn Suppressed:</span>
+            <span class="{{ 'text-red-600 font-medium' if contact.linkedin_suppressed else 'text-green-600' }}">{{ 'Yes' if contact.linkedin_suppressed else 'No' }}</span></div>
+        <div><span class="text-gray-400">Phone Suppressed:</span>
+            <span class="{{ 'text-red-600 font-medium' if contact.phone_suppressed else 'text-green-600' }}">{{ 'Yes' if contact.phone_suppressed else 'No' }}</span></div>
+
+        <div><span class="text-gray-400">Email Cooldown:</span> <span class="text-gray-900">{{ contact.email_cooldown_until.strftime('%Y-%m-%d') if contact.email_cooldown_until else '-' }}</span></div>
+        <div><span class="text-gray-400">LinkedIn Cooldown:</span> <span class="text-gray-900">{{ contact.linkedin_cooldown_until.strftime('%Y-%m-%d') if contact.linkedin_cooldown_until else '-' }}</span></div>
+        <div><span class="text-gray-400">Phone Cooldown:</span> <span class="text-gray-900">{{ contact.phone_cooldown_until.strftime('%Y-%m-%d') if contact.phone_cooldown_until else '-' }}</span></div>
+
+        <div><span class="text-gray-400">Email Last Contacted:</span> <span class="text-gray-900">{{ contact.email_last_contacted.strftime('%Y-%m-%d') if contact.email_last_contacted else '-' }}</span></div>
+        <div><span class="text-gray-400">Enriched At:</span> <span class="text-gray-900">{{ contact.data_enriched_at.strftime('%Y-%m-%d') if contact.data_enriched_at else '-' }}</span></div>
+        <div><span class="text-gray-400">Updated:</span> <span class="text-gray-900">{{ contact.updated_at.strftime('%Y-%m-%d %H:%M') if contact.updated_at else '-' }}</span></div>
+    </div>
+</div>
+
+<!-- Transition Actions -->
+{% if allowed_transitions %}
+<div class="bg-white rounded-lg shadow p-4 mb-6">
+    <h3 class="text-sm font-semibold text-gray-700 mb-3">Transition To</h3>
+    <div class="flex flex-wrap gap-2" id="transitionButtons">
+        {% for t in allowed_transitions %}
+        <button onclick="doTransition('{{ t }}')"
+            class="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-100 transition-colors">
+            {{ t }}
+        </button>
+        {% endfor %}
+    </div>
+    <div id="transitionResult" class="mt-3 text-sm hidden"></div>
+</div>
+{% endif %}
+
+<!-- History -->
+<div class="bg-white rounded-lg shadow p-4">
+    <h3 class="text-sm font-semibold text-gray-700 mb-3">Disposition History</h3>
+    <table class="w-full text-sm">
+        <thead class="text-left text-xs text-gray-500 uppercase">
+            <tr>
+                <th class="px-3 py-2">Timestamp</th>
+                <th class="px-3 py-2">From</th>
+                <th class="px-3 py-2">To</th>
+                <th class="px-3 py-2">Reason</th>
+                <th class="px-3 py-2">By</th>
+            </tr>
+        </thead>
+        <tbody id="historyBody" class="divide-y divide-gray-100">
+            <tr><td colspan="5" class="px-3 py-4 text-center text-gray-400">Loading...</td></tr>
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const EMAIL = '{{ contact.email }}';
+const CLIENT_ID = '{{ contact.client_id }}';
+
+async function loadHistory() {
+    const res = await fetch(`/api/contacts/${encodeURIComponent(EMAIL)}/${encodeURIComponent(CLIENT_ID)}/history`);
+    const data = await res.json();
+    const body = document.getElementById('historyBody');
+    if (!data.items.length) {
+        body.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-center text-gray-400">No history</td></tr>';
+        return;
+    }
+    body.innerHTML = data.items.map(h => `
+        <tr>
+            <td class="px-3 py-2 text-gray-500 text-xs">${new Date(h.created_at).toLocaleString()}</td>
+            <td class="px-3 py-2"><span class="text-xs">${h.previous_status || '-'}</span></td>
+            <td class="px-3 py-2"><span class="text-xs font-medium">${h.new_status}</span></td>
+            <td class="px-3 py-2 text-gray-600 text-xs">${h.transition_reason || '-'}</td>
+            <td class="px-3 py-2 text-gray-400 text-xs">${h.triggered_by}</td>
+        </tr>
+    `).join('');
+}
+
+async function doTransition(newStatus) {
+    const reason = prompt(`Transition to ${newStatus}. Reason (optional):`);
+    if (reason === null) return;
+    const params = new URLSearchParams({ new_status: newStatus });
+    if (reason) params.set('reason', reason);
+    const res = await fetch(`/api/contacts/${encodeURIComponent(EMAIL)}/${encodeURIComponent(CLIENT_ID)}/transition?${params}`, { method: 'POST' });
+    const result = document.getElementById('transitionResult');
+    result.classList.remove('hidden');
+    if (res.ok) {
+        result.className = 'mt-3 text-sm text-green-700 bg-green-50 p-2 rounded';
+        result.textContent = `Transitioned to ${newStatus}`;
+        setTimeout(() => location.reload(), 800);
+    } else {
+        const err = await res.json();
+        result.className = 'mt-3 text-sm text-red-700 bg-red-50 p-2 rounded';
+        result.textContent = err.detail || 'Transition failed';
+    }
+}
+
+loadHistory();
+</script>
+{% endblock %}

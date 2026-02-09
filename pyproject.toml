@@ -1,0 +1,62 @@
+[project]
+name = "lead-disposition"
+version = "0.1.0"
+description = "Lead Disposition System - Contact state machine with cooldown logic, TAM tracking, and campaign fill engine"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "BrainOn", email = "dev@brainon.dev"}
+]
+keywords = ["leads", "disposition", "state-machine", "tam", "outbound"]
+
+dependencies = [
+    "aiosqlite>=0.19.0",
+    "httpx>=0.27.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "python-dotenv>=1.0.0",
+    "orjson>=3.9.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "jinja2>=3.1.0",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+postgres = [
+    "asyncpg>=0.29.0",
+]
+prefect = [
+    "prefect>=3.0.0",
+]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+disposition-init-db = "lead_disposition.scripts.init_db:main"
+disposition-snapshot = "lead_disposition.scripts.snapshot:main"
+disposition-serve = "lead_disposition.web.serve:main"
+disposition-bridge = "lead_disposition.bridge.charm_worker:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lead_disposition"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "B", "C4", "UP"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

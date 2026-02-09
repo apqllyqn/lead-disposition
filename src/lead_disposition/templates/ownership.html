@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}Ownership - Lead Disposition{% endblock %}
+{% block nav_ownership %}bg-gray-700{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold text-gray-900">Company Ownership</h1>
+    <div class="flex items-center space-x-3">
+        <select id="clientFilter" class="border border-gray-300 rounded px-3 py-1.5 text-sm bg-white">
+            <option value="">All Clients</option>
+        </select>
+        <button onclick="processExpired()" class="border border-gray-300 hover:bg-gray-100 px-3 py-1.5 rounded text-sm">
+            Process Expired
+        </button>
+    </div>
+</div>
+
+<div class="bg-white rounded-lg shadow overflow-hidden">
+    <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-left text-xs text-gray-500 uppercase">
+            <tr>
+                <th class="px-4 py-3">Domain</th>
+                <th class="px-4 py-3">Company</th>
+                <th class="px-4 py-3">Owner</th>
+                <th class="px-4 py-3">Status</th>
+                <th class="px-4 py-3">Owned Since</th>
+                <th class="px-4 py-3">Expires</th>
+                <th class="px-4 py-3">In Sequence</th>
+                <th class="px-4 py-3">Actions</th>
+            </tr>
+        </thead>
+        <tbody id="ownershipBody" class="divide-y divide-gray-100">
+            <tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">Loading...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<div id="statusMsg" class="mt-4 text-sm hidden"></div>
+
+<!-- Transfer Modal -->
+<div id="transferModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+    <div class="bg-white rounded-lg shadow-xl p-6 w-96">
+        <h3 class="text-sm font-semibold mb-3">Transfer Ownership</h3>
+        <p class="text-xs text-gray-500 mb-3">Domain: <span id="transferDomain" class="font-mono"></span></p>
+        <input type="text" id="transferClientId" placeholder="New client ID" class="w-full border border-gray-300 rounded px-3 py-2 text-sm mb-3">
+        <div class="flex justify-end space-x-2">
+            <button onclick="closeTransferModal()" class="px-3 py-1.5 border rounded text-sm">Cancel</button>
+            <button onclick="confirmTransfer()" class="px-3 py-1.5 bg-orange-500 text-white rounded text-sm">Transfer</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let transferDomainValue = '';
+
+async function loadClients() {
+    const res = await fetch('/api/clients');
+    const data = await res.json();
+    const sel = document.getElementById('clientFilter');
+    data.items.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c; opt.textContent = c;
+        sel.appendChild(opt);
+    });
+}
+
+async function loadOwnership() {
+    const clientId = document.getElementById('clientFilter').value;
+    const url = clientId ? `/api/ownership?client_id=${clientId}` : '/api/ownership';
+    const res = await fetch(url);
+    const data = await res.json();
+
+    const body = document.getElementById('ownershipBody');
+    if (!data.items.length) {
+        body.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">No owned companies</td></tr>';
+        return;
+    }
+
+    body.innerHTML = data.items.map(c => `
+        <tr>
+            <td class="px-4 py-2.5 font-mono text-xs">${esc(c.domain)}</td>
+            <td class="px-4 py-2.5">${esc(c.name || '-')}</td>
+            <td class="px-4 py-2.5 text-xs">${esc(c.client_owner_id)}</td>
+            <td class="px-4 py-2.5">
+                <span class="px-2 py-0.5 rounded-full text-xs font-medium
+                    ${c.company_suppressed ? 'bg-red-100 text-red-800' : c.is_customer ? 'bg-teal-100 text-teal-800' : 'bg-gray-100 text-gray-800'}">
+                    ${c.company_status}
+                </span>
+            </td>
+            <td class="px-4 py-2.5 text-gray-500 text-xs">${c.client_owned_at ? new Date(c.client_owned_at).toLocaleDateString() : '-'}</td>
+            <td class="px-4 py-2.5 text-gray-500 text-xs">${c.ownership_expires_at ? new Date(c.ownership_expires_at).toLocaleDateString() : '-'}</td>
+            <td class="px-4 py-2.5 text-center">${c.contacts_in_sequence}</td>
+            <td class="px-4 py-2.5 space-x-1">
+                <button onclick="releaseOwnership('${esc(c.domain)}')" class="px-2 py-1 border rounded text-xs hover:bg-red-50 text-red-600">Release</button>
+                <button onclick="openTransferModal('${esc(c.domain)}')" class="px-2 py-1 border rounded text-xs hover:bg-blue-50 text-blue-600">Transfer</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function releaseOwnership(domain) {
+    if (!confirm(`Release ownership of ${domain}?`)) return;
+    const res = await fetch(`/api/ownership/${encodeURIComponent(domain)}/release`, { method: 'POST' });
+    showStatus(res.ok ? 'Released' : 'Failed', res.ok);
+    loadOwnership();
+}
+
+function openTransferModal(domain) {
+    transferDomainValue = domain;
+    document.getElementById('transferDomain').textContent = domain;
+    document.getElementById('transferClientId').value = '';
+    document.getElementById('transferModal').classList.remove('hidden');
+}
+
+function closeTransferModal() {
+    document.getElementById('transferModal').classList.add('hidden');
+}
+
+async function confirmTransfer() {
+    const newClient = document.getElementById('transferClientId').value.trim();
+    if (!newClient) { alert('Enter a client ID'); return; }
+    const res = await fetch(`/api/ownership/${encodeURIComponent(transferDomainValue)}/transfer?new_client_id=${encodeURIComponent(newClient)}`, { method: 'POST' });
+    closeTransferModal();
+    showStatus(res.ok ? 'Transferred' : 'Failed', res.ok);
+    loadOwnership();
+}
+
+async function processExpired() {
+    const res = await fetch('/api/maintenance/ownerships', { method: 'POST' });
+    const data = await res.json();
+    showStatus(`Released ${data.released} expired ownerships`, true);
+    loadOwnership();
+}
+
+function showStatus(msg, ok) {
+    const el = document.getElementById('statusMsg');
+    el.className = `mt-4 text-sm p-2 rounded ${ok ? 'text-green-700 bg-green-50' : 'text-red-700 bg-red-50'}`;
+    el.textContent = msg;
+    el.classList.remove('hidden');
+    setTimeout(() => el.classList.add('hidden'), 3000);
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+document.getElementById('clientFilter').addEventListener('change', loadOwnership);
+loadClients();
+loadOwnership();
+</script>
+{% endblock %}

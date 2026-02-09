@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Import - Lead Disposition{% endblock %}
+{% block nav_import %}bg-gray-700{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold text-gray-900 mb-6">CSV Import</h1>
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <!-- Upload Form -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="text-sm font-semibold text-gray-700 mb-4">Upload Contacts</h3>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Client ID *</label>
+                <input type="text" id="clientId" placeholder="e.g. client_acme" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">CSV File *</label>
+                <input type="file" id="csvFile" accept=".csv" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+            </div>
+            <div class="bg-gray-50 rounded p-3 text-xs text-gray-500">
+                <p class="font-medium mb-1">Expected columns:</p>
+                <code>email, first_name, last_name, company_domain, last_known_title, last_known_company</code>
+                <p class="mt-1">If <code>company_domain</code> is missing, it will be extracted from the email address.</p>
+            </div>
+            <button onclick="doImport()" id="importBtn" class="w-full bg-orange-500 hover:bg-orange-600 text-white py-2 rounded font-medium text-sm">
+                Import
+            </button>
+        </div>
+    </div>
+
+    <!-- Results -->
+    <div class="bg-white rounded-lg shadow p-6" id="resultPanel" style="display:none">
+        <h3 class="text-sm font-semibold text-gray-700 mb-4">Import Results</h3>
+        <div class="grid grid-cols-2 gap-3 mb-4" id="resultStats"></div>
+        <div id="resultErrors"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function doImport() {
+    const btn = document.getElementById('importBtn');
+    const clientId = document.getElementById('clientId').value.trim();
+    const fileInput = document.getElementById('csvFile');
+
+    if (!clientId) { alert('Client ID is required'); return; }
+    if (!fileInput.files.length) { alert('Please select a CSV file'); return; }
+
+    btn.disabled = true; btn.textContent = 'Importing...';
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    formData.append('client_id', clientId);
+
+    try {
+        const res = await fetch('/api/import/csv', { method: 'POST', body: formData });
+        const panel = document.getElementById('resultPanel');
+        panel.style.display = 'block';
+
+        if (!res.ok) {
+            const err = await res.json();
+            document.getElementById('resultStats').innerHTML = `<div class="col-span-2 text-red-600">${err.detail}</div>`;
+            return;
+        }
+
+        const r = await res.json();
+        document.getElementById('resultStats').innerHTML = `
+            <div class="bg-gray-50 rounded p-3"><div class="text-xs text-gray-500">Total Rows</div><div class="text-xl font-bold">${r.total_rows}</div></div>
+            <div class="bg-green-50 rounded p-3"><div class="text-xs text-green-600">Imported</div><div class="text-xl font-bold text-green-700">${r.imported}</div></div>
+            <div class="bg-yellow-50 rounded p-3"><div class="text-xs text-yellow-600">Duplicates</div><div class="text-xl font-bold text-yellow-700">${r.duplicates}</div></div>
+            <div class="bg-red-50 rounded p-3"><div class="text-xs text-red-600">Skipped</div><div class="text-xl font-bold text-red-700">${r.skipped}</div></div>
+        `;
+
+        const errDiv = document.getElementById('resultErrors');
+        if (r.errors.length) {
+            errDiv.innerHTML = '<h4 class="text-xs font-semibold text-red-600 mb-2">Errors:</h4>' +
+                r.errors.slice(0, 20).map(e => `<div class="text-xs text-red-500 mb-1">${e}</div>`).join('') +
+                (r.errors.length > 20 ? `<div class="text-xs text-gray-400">...and ${r.errors.length - 20} more</div>` : '');
+        } else {
+            errDiv.innerHTML = '';
+        }
+    } finally {
+        btn.disabled = false; btn.textContent = 'Import';
+    }
+}
+</script>
+{% endblock %}

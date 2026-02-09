@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}Contacts - Lead Disposition{% endblock %}
+{% block nav_contacts %}bg-gray-700{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold text-gray-900">Contacts</h1>
+    <div class="text-sm text-gray-500" id="countLabel"></div>
+</div>
+
+<!-- Filters -->
+<div class="bg-white rounded-lg shadow p-4 mb-4 flex flex-wrap items-end gap-3">
+    <div>
+        <label class="block text-xs text-gray-500 mb-1">Search</label>
+        <input type="text" id="searchInput" placeholder="Email, name, company..." class="border border-gray-300 rounded px-3 py-1.5 text-sm w-56">
+    </div>
+    <div>
+        <label class="block text-xs text-gray-500 mb-1">Status</label>
+        <select id="statusFilter" class="border border-gray-300 rounded px-3 py-1.5 text-sm">
+            <option value="">All</option>
+            {% for s in statuses %}
+            <option value="{{ s }}">{{ s }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label class="block text-xs text-gray-500 mb-1">Client</label>
+        <select id="clientFilter" class="border border-gray-300 rounded px-3 py-1.5 text-sm">
+            <option value="">All</option>
+        </select>
+    </div>
+    <button onclick="currentOffset=0; loadContacts()" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-1.5 rounded text-sm font-medium">Search</button>
+</div>
+
+<!-- Table -->
+<div class="bg-white rounded-lg shadow overflow-hidden">
+    <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-left text-xs text-gray-500 uppercase">
+            <tr>
+                <th class="px-4 py-3">Email</th>
+                <th class="px-4 py-3">Name</th>
+                <th class="px-4 py-3">Title</th>
+                <th class="px-4 py-3">Company</th>
+                <th class="px-4 py-3">Status</th>
+                <th class="px-4 py-3">Client</th>
+                <th class="px-4 py-3">Updated</th>
+            </tr>
+        </thead>
+        <tbody id="contactsBody" class="divide-y divide-gray-100"></tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+<div class="flex items-center justify-between mt-4">
+    <button onclick="prevPage()" id="prevBtn" class="px-3 py-1.5 border rounded text-sm disabled:opacity-40" disabled>Previous</button>
+    <span class="text-sm text-gray-500" id="pageInfo"></span>
+    <button onclick="nextPage()" id="nextBtn" class="px-3 py-1.5 border rounded text-sm disabled:opacity-40" disabled>Next</button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const LIMIT = 50;
+let currentOffset = 0;
+let totalCount = 0;
+
+const STATUS_COLORS = {
+    fresh: 'bg-green-100 text-green-800',
+    in_sequence: 'bg-blue-100 text-blue-800',
+    completed_no_response: 'bg-gray-100 text-gray-800',
+    replied_positive: 'bg-emerald-100 text-emerald-800',
+    replied_neutral: 'bg-cyan-100 text-cyan-800',
+    replied_negative: 'bg-orange-100 text-orange-800',
+    replied_hard_no: 'bg-red-100 text-red-800',
+    bounced: 'bg-red-100 text-red-800',
+    unsubscribed: 'bg-red-100 text-red-800',
+    retouch_eligible: 'bg-yellow-100 text-yellow-800',
+    stale_data: 'bg-amber-100 text-amber-800',
+    job_change_detected: 'bg-purple-100 text-purple-800',
+    won_customer: 'bg-teal-100 text-teal-800',
+    lost_closed: 'bg-gray-100 text-gray-800',
+};
+
+async function loadClients() {
+    const res = await fetch('/api/clients');
+    const data = await res.json();
+    const sel = document.getElementById('clientFilter');
+    data.items.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c; opt.textContent = c;
+        sel.appendChild(opt);
+    });
+}
+
+async function loadContacts() {
+    const params = new URLSearchParams({ limit: LIMIT, offset: currentOffset });
+    const search = document.getElementById('searchInput').value;
+    const status = document.getElementById('statusFilter').value;
+    const client = document.getElementById('clientFilter').value;
+    if (search) params.set('search', search);
+    if (status) params.set('status', status);
+    if (client) params.set('client_id', client);
+
+    const res = await fetch(`/api/contacts?${params}`);
+    const data = await res.json();
+    totalCount = data.total;
+
+    const body = document.getElementById('contactsBody');
+    if (data.items.length === 0) {
+        body.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-400">No contacts found</td></tr>';
+    } else {
+        body.innerHTML = data.items.map(c => `
+            <tr class="hover:bg-gray-50 cursor-pointer" onclick="window.location='/contacts/${encodeURIComponent(c.email)}/${encodeURIComponent(c.client_id)}'">
+                <td class="px-4 py-2.5 font-mono text-xs">${esc(c.email)}</td>
+                <td class="px-4 py-2.5">${esc((c.first_name||'')+ ' ' +(c.last_name||''))}</td>
+                <td class="px-4 py-2.5 text-gray-600">${esc(c.last_known_title||'-')}</td>
+                <td class="px-4 py-2.5">${esc(c.last_known_company||c.company_domain)}</td>
+                <td class="px-4 py-2.5"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[c.disposition_status]||'bg-gray-100'}">${c.disposition_status}</span></td>
+                <td class="px-4 py-2.5 text-gray-500 text-xs">${esc(c.client_id)}</td>
+                <td class="px-4 py-2.5 text-gray-400 text-xs">${c.updated_at ? new Date(c.updated_at).toLocaleDateString() : '-'}</td>
+            </tr>
+        `).join('');
+    }
+
+    document.getElementById('countLabel').textContent = `${totalCount.toLocaleString()} contacts`;
+    document.getElementById('pageInfo').textContent = `${currentOffset + 1}-${Math.min(currentOffset + LIMIT, totalCount)} of ${totalCount}`;
+    document.getElementById('prevBtn').disabled = currentOffset === 0;
+    document.getElementById('nextBtn').disabled = currentOffset + LIMIT >= totalCount;
+}
+
+function prevPage() { currentOffset = Math.max(0, currentOffset - LIMIT); loadContacts(); }
+function nextPage() { currentOffset += LIMIT; loadContacts(); }
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+document.getElementById('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') { currentOffset = 0; loadContacts(); } });
+loadClients();
+loadContacts();
+</script>
+{% endblock %}

@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}TAM Dashboard - Lead Disposition{% endblock %}
+{% block nav_dashboard %}bg-gray-700{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold text-gray-900">TAM Dashboard</h1>
+    <div class="flex items-center space-x-3">
+        <select id="clientFilter" class="border border-gray-300 rounded px-3 py-1.5 text-sm bg-white">
+            <option value="">All Clients</option>
+        </select>
+        <button onclick="captureSnapshot()" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-1.5 rounded text-sm font-medium">
+            Capture Snapshot
+        </button>
+    </div>
+</div>
+
+<!-- Stat Cards -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" id="statCards">
+    <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-sm text-gray-500">Total Universe</div>
+        <div class="text-2xl font-bold" id="statTotal">-</div>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-sm text-gray-500">Available Now</div>
+        <div class="text-2xl font-bold text-green-600" id="statAvailable">-</div>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-sm text-gray-500">Burn Rate / Week</div>
+        <div class="text-2xl font-bold text-amber-600" id="statBurn">-</div>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+        <div class="text-sm text-gray-500">Exhaustion ETA</div>
+        <div class="text-2xl font-bold" id="statEta">-</div>
+        <div class="text-xs mt-1" id="healthBadge"></div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div class="bg-white rounded-lg shadow p-4">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">Pool Segmentation</h3>
+        <canvas id="pieChart" height="260"></canvas>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">Pool Breakdown</h3>
+        <canvas id="barChart" height="260"></canvas>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let pieChart, barChart;
+
+const COLORS = {
+    never_touched: '#22c55e',
+    available_now: '#3b82f6',
+    in_sequence: '#8b5cf6',
+    in_cooldown: '#f59e0b',
+    permanent_suppress: '#ef4444',
+    won_customer: '#06b6d4',
+};
+
+async function loadClients() {
+    const res = await fetch('/api/clients');
+    const data = await res.json();
+    const sel = document.getElementById('clientFilter');
+    data.items.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c;
+        opt.textContent = c;
+        sel.appendChild(opt);
+    });
+}
+
+async function loadHealth() {
+    const clientId = document.getElementById('clientFilter').value;
+    const url = clientId ? `/api/tam/health?client_id=${clientId}` : '/api/tam/health';
+    const res = await fetch(url);
+    const h = await res.json();
+
+    document.getElementById('statTotal').textContent = h.total_universe.toLocaleString();
+    document.getElementById('statAvailable').textContent = h.available_now.toLocaleString();
+    document.getElementById('statBurn').textContent = h.burn_rate_weekly.toLocaleString();
+
+    const eta = h.exhaustion_eta_weeks;
+    document.getElementById('statEta').textContent = eta != null ? `${eta.toFixed(1)} wks` : 'N/A';
+
+    const badge = document.getElementById('healthBadge');
+    const colors = { healthy: 'bg-green-100 text-green-800', warning: 'bg-yellow-100 text-yellow-800', critical: 'bg-red-100 text-red-800' };
+    badge.className = `text-xs mt-1 inline-block px-2 py-0.5 rounded-full font-medium ${colors[h.health_status] || ''}`;
+    badge.textContent = h.health_status.toUpperCase();
+
+    renderCharts(h);
+}
+
+function renderCharts(h) {
+    const labels = ['Never Touched', 'Available Now', 'In Sequence', 'In Cooldown', 'Suppressed', 'Won/Customer'];
+    const values = [h.never_touched, h.available_now, h.in_sequence, h.in_cooldown, h.permanent_suppress, h.won_customer];
+    const colors = Object.values(COLORS);
+
+    if (pieChart) pieChart.destroy();
+    pieChart = new Chart(document.getElementById('pieChart'), {
+        type: 'doughnut',
+        data: { labels, datasets: [{ data: values, backgroundColor: colors }] },
+        options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } }
+    });
+
+    if (barChart) barChart.destroy();
+    barChart = new Chart(document.getElementById('barChart'), {
+        type: 'bar',
+        data: { labels, datasets: [{ data: values, backgroundColor: colors }] },
+        options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    });
+}
+
+async function captureSnapshot() {
+    const clientId = document.getElementById('clientFilter').value;
+    const url = clientId ? `/api/tam/snapshot?client_id=${clientId}` : '/api/tam/snapshot';
+    await fetch(url, { method: 'POST' });
+    await loadHealth();
+}
+
+document.getElementById('clientFilter').addEventListener('change', loadHealth);
+loadClients();
+loadHealth();
+</script>
+{% endblock %}

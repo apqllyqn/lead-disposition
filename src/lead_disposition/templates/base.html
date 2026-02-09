@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Lead Disposition{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-gray-900 text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex items-center justify-between h-14">
+                <div class="flex items-center space-x-1">
+                    <span class="text-lg font-bold text-orange-400 mr-6">Disposition</span>
+                    <a href="/" class="px-3 py-2 rounded text-sm hover:bg-gray-700 {% block nav_dashboard %}{% endblock %}">Dashboard</a>
+                    <a href="/contacts" class="px-3 py-2 rounded text-sm hover:bg-gray-700 {% block nav_contacts %}{% endblock %}">Contacts</a>
+                    <a href="/campaign-fill" class="px-3 py-2 rounded text-sm hover:bg-gray-700 {% block nav_fill %}{% endblock %}">Campaign Fill</a>
+                    <a href="/import" class="px-3 py-2 rounded text-sm hover:bg-gray-700 {% block nav_import %}{% endblock %}">Import</a>
+                    <a href="/ownership" class="px-3 py-2 rounded text-sm hover:bg-gray-700 {% block nav_ownership %}{% endblock %}">Ownership</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Content -->
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        {% block content %}{% endblock %}
+    </main>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>
