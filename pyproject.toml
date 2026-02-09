@@ -1,6 +1,6 @@
 [project]
 name = "lead-disposition"
-version = "0.1.0"
+version = "0.2.0"
 description = "Lead Disposition System - Contact state machine with cooldown logic, TAM tracking, and campaign fill engine"
 readme = "README.md"
 requires-python = ">=3.11"
