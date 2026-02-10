@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from lead_disposition.core.config import Settings
-from lead_disposition.core.database import Database
 from lead_disposition.core.models import (
     CampaignFillRequest,
     CampaignFillResult,
@@ -19,7 +19,7 @@ from lead_disposition.state_machine import StateMachine
 class CampaignFillEngine:
     """Fills campaigns with eligible contacts while respecting disposition rules."""
 
-    def __init__(self, db: Database, settings: Settings | None = None):
+    def __init__(self, db: Any, settings: Settings | None = None):
         self.db = db
         self.settings = settings or Settings()
         self.sm = StateMachine(db, self.settings)

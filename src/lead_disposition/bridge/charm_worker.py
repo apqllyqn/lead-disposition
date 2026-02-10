@@ -70,6 +70,19 @@ class CharmBridgeWorker:
         )
         await self.db.connect()
 
+        # Verify schema configuration on startup
+        row = await self.db.pool.fetchrow("SHOW search_path")
+        logger.info("PostgreSQL search_path: %s", row[0] if row else "unknown")
+        row = await self.db.pool.fetchrow(
+            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'disposition'"
+        )
+        logger.info("Disposition schema tables: %s", row[0] if row else 0)
+        row = await self.db.pool.fetchrow(
+            "SELECT COUNT(*) FROM information_schema.tables "
+            "WHERE table_schema = 'public' AND table_name = 'lead_pull_jobs'"
+        )
+        logger.info("lead_pull_jobs table exists: %s", (row[0] > 0) if row else False)
+
         self._running = True
         logger.info(
             "Bridge worker started — polling every %ds",
@@ -94,12 +107,13 @@ class CharmBridgeWorker:
     async def _poll_once(self) -> None:
         """Check for pending jobs and process the oldest one."""
         # Claim the oldest pending job (SKIP LOCKED prevents double-processing)
+        # lead_pull_jobs lives in public schema (Charm's tables)
         row = await self.db.pool.fetchrow(
             """
-            UPDATE lead_pull_jobs
+            UPDATE public.lead_pull_jobs
             SET status = 'processing', started_at = NOW()
             WHERE id = (
-                SELECT id FROM lead_pull_jobs
+                SELECT id FROM public.lead_pull_jobs
                 WHERE status = 'pending'
                 ORDER BY created_at ASC
                 LIMIT 1
@@ -123,7 +137,7 @@ class CharmBridgeWorker:
 
             await self.db.pool.execute(
                 """
-                UPDATE lead_pull_jobs
+                UPDATE public.lead_pull_jobs
                 SET status = 'completed',
                     result_data = $1::jsonb,
                     completed_at = NOW()
@@ -146,7 +160,7 @@ class CharmBridgeWorker:
             logger.exception("Job %s failed", job_id)
             await self.db.pool.execute(
                 """
-                UPDATE lead_pull_jobs
+                UPDATE public.lead_pull_jobs
                 SET status = 'failed',
                     error_message = $1,
                     completed_at = NOW()

@@ -5,6 +5,8 @@ Matches Charm Email OS env var pattern: individual POSTGRES_* variables.
 
 from __future__ import annotations
 
+from urllib.parse import quote_plus
+
 from pydantic_settings import BaseSettings
 
 
@@ -25,7 +27,7 @@ class Settings(BaseSettings):
         if self.use_sqlite:
             return f"sqlite:///{self.sqlite_path}"
         return (
-            f"postgresql://{self.postgres_user}:{self.postgres_password}"
+            f"postgresql://{quote_plus(self.postgres_user)}:{quote_plus(self.postgres_password)}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
