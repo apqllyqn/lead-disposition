@@ -42,7 +42,9 @@
     <div class="bg-white rounded-lg shadow-xl p-6 w-96">
         <h3 class="text-sm font-semibold mb-3">Transfer Ownership</h3>
         <p class="text-xs text-gray-500 mb-3">Domain: <span id="transferDomain" class="font-mono"></span></p>
-        <input type="text" id="transferClientId" placeholder="New client ID" class="w-full border border-gray-300 rounded px-3 py-2 text-sm mb-3">
+        <select id="transferClientId" class="w-full border border-gray-300 rounded px-3 py-2 text-sm mb-3">
+            <option value="">Select new owner...</option>
+        </select>
         <div class="flex justify-end space-x-2">
             <button onclick="closeTransferModal()" class="px-3 py-1.5 border rounded text-sm">Cancel</button>
             <button onclick="confirmTransfer()" class="px-3 py-1.5 bg-orange-500 text-white rounded text-sm">Transfer</button>
@@ -54,15 +56,20 @@
 {% block scripts %}
 <script>
 let transferDomainValue = '';
+const clientNames = {};
 
 async function loadClients() {
-    const res = await fetch('/api/clients');
+    const res = await fetch('/api/charm/clients');
     const data = await res.json();
     const sel = document.getElementById('clientFilter');
+    const transferSel = document.getElementById('transferClientId');
     data.items.forEach(c => {
+        clientNames[c.id] = c.name;
         const opt = document.createElement('option');
-        opt.value = c; opt.textContent = c;
+        opt.value = c.id;
+        opt.textContent = c.name;
         sel.appendChild(opt);
+        transferSel.appendChild(opt.cloneNode(true));
     });
 }
 
@@ -82,7 +89,7 @@ async function loadOwnership() {
         <tr>
             <td class="px-4 py-2.5 font-mono text-xs">${esc(c.domain)}</td>
             <td class="px-4 py-2.5">${esc(c.name || '-')}</td>
-            <td class="px-4 py-2.5 text-xs">${esc(c.client_owner_id)}</td>
+            <td class="px-4 py-2.5 text-xs">${esc(clientNames[c.client_owner_id] || c.client_owner_id)}</td>
             <td class="px-4 py-2.5">
                 <span class="px-2 py-0.5 rounded-full text-xs font-medium
                     ${c.company_suppressed ? 'bg-red-100 text-red-800' : c.is_customer ? 'bg-teal-100 text-teal-800' : 'bg-gray-100 text-gray-800'}">

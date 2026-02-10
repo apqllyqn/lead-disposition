@@ -30,7 +30,7 @@
         <div><span class="text-gray-400">Title:</span> <span class="text-gray-900">{{ contact.last_known_title or '-' }}</span></div>
         <div><span class="text-gray-400">Company:</span> <span class="text-gray-900">{{ contact.last_known_company or '-' }}</span></div>
         <div><span class="text-gray-400">Domain:</span> <span class="text-gray-900 font-mono">{{ contact.company_domain }}</span></div>
-        <div><span class="text-gray-400">Client:</span> <span class="text-gray-900">{{ contact.client_id }}</span></div>
+        <div><span class="text-gray-400">Client:</span> <span class="text-gray-900">{{ client_name }}</span></div>
         <div><span class="text-gray-400">Sequences:</span> <span class="text-gray-900">{{ contact.sequence_count }}</span></div>
         <div><span class="text-gray-400">Source:</span> <span class="text-gray-900">{{ contact.source_system or '-' }}</span></div>
 

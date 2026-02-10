@@ -11,14 +11,17 @@
         <h3 class="text-sm font-semibold text-gray-700 mb-4">Fill Parameters</h3>
         <div class="space-y-4">
             <div>
-                <label class="block text-xs text-gray-500 mb-1">Campaign ID *</label>
-                <input type="text" id="campaignId" placeholder="e.g. camp_q1_saas" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
-            </div>
-            <div>
-                <label class="block text-xs text-gray-500 mb-1">Client ID *</label>
-                <select id="clientId" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                <label class="block text-xs text-gray-500 mb-1">Client *</label>
+                <select id="clientId" class="w-full border border-gray-300 rounded px-3 py-2 text-sm" onchange="loadStrategies()">
                     <option value="">Select client...</option>
                 </select>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Campaign (Approved Strategy)</label>
+                <select id="campaignId" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                    <option value="">Select a strategy or enter custom...</option>
+                </select>
+                <input type="text" id="campaignIdCustom" placeholder="Or enter a custom campaign ID" class="w-full border border-gray-300 rounded px-3 py-2 text-sm mt-1" style="display:none">
             </div>
             <div>
                 <label class="block text-xs text-gray-500 mb-1">Channel</label>
@@ -76,23 +79,68 @@
 {% block scripts %}
 <script>
 async function loadClients() {
-    const res = await fetch('/api/clients');
+    const res = await fetch('/api/charm/clients');
     const data = await res.json();
     const sel = document.getElementById('clientId');
     data.items.forEach(c => {
         const opt = document.createElement('option');
-        opt.value = c; opt.textContent = c;
+        opt.value = c.id;
+        opt.textContent = c.name;
         sel.appendChild(opt);
     });
+}
+
+async function loadStrategies() {
+    const clientId = document.getElementById('clientId').value;
+    const sel = document.getElementById('campaignId');
+    sel.innerHTML = '<option value="">Select a strategy...</option>';
+
+    if (!clientId) return;
+
+    const res = await fetch(`/api/charm/strategies?client_id=${clientId}`);
+    const data = await res.json();
+
+    if (data.items.length === 0) {
+        sel.innerHTML = '<option value="">(No approved strategies)</option>';
+        document.getElementById('campaignIdCustom').style.display = 'block';
+    } else {
+        document.getElementById('campaignIdCustom').style.display = 'none';
+        data.items.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = `[${s.campaign_type}] ${s.label}`;
+            sel.appendChild(opt);
+        });
+        const customOpt = document.createElement('option');
+        customOpt.value = '__custom__';
+        customOpt.textContent = '-- Enter custom ID --';
+        sel.appendChild(customOpt);
+    }
+
+    sel.onchange = function() {
+        document.getElementById('campaignIdCustom').style.display =
+            sel.value === '__custom__' ? 'block' : 'none';
+    };
 }
 
 async function runFill() {
     const btn = document.getElementById('fillBtn');
     btn.disabled = true; btn.textContent = 'Filling...';
 
+    let campaignId = document.getElementById('campaignId').value;
+    if (campaignId === '__custom__' || !campaignId) {
+        campaignId = document.getElementById('campaignIdCustom').value.trim();
+    }
+
+    if (!campaignId) {
+        alert('Please select or enter a campaign ID');
+        btn.disabled = false; btn.textContent = 'Fill Campaign';
+        return;
+    }
+
     const keywords = document.getElementById('titleKeywords').value;
     const body = {
-        campaign_id: document.getElementById('campaignId').value,
+        campaign_id: campaignId,
         client_id: document.getElementById('clientId').value,
         channel: document.getElementById('channel').value,
         volume: parseInt(document.getElementById('volume').value),

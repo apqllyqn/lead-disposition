@@ -11,8 +11,10 @@
         <h3 class="text-sm font-semibold text-gray-700 mb-4">Upload Contacts</h3>
         <div class="space-y-4">
             <div>
-                <label class="block text-xs text-gray-500 mb-1">Client ID *</label>
-                <input type="text" id="clientId" placeholder="e.g. client_acme" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                <label class="block text-xs text-gray-500 mb-1">Client *</label>
+                <select id="clientId" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                    <option value="">Select client...</option>
+                </select>
             </div>
             <div>
                 <label class="block text-xs text-gray-500 mb-1">CSV File *</label>
@@ -40,12 +42,24 @@
 
 {% block scripts %}
 <script>
+async function loadClients() {
+    const res = await fetch('/api/charm/clients');
+    const data = await res.json();
+    const sel = document.getElementById('clientId');
+    data.items.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.name;
+        sel.appendChild(opt);
+    });
+}
+
 async function doImport() {
     const btn = document.getElementById('importBtn');
-    const clientId = document.getElementById('clientId').value.trim();
+    const clientId = document.getElementById('clientId').value;
     const fileInput = document.getElementById('csvFile');
 
-    if (!clientId) { alert('Client ID is required'); return; }
+    if (!clientId) { alert('Please select a client'); return; }
     if (!fileInput.files.length) { alert('Please select a CSV file'); return; }
 
     btn.disabled = true; btn.textContent = 'Importing...';
@@ -85,5 +99,7 @@ async function doImport() {
         btn.disabled = false; btn.textContent = 'Import';
     }
 }
+
+loadClients();
 </script>
 {% endblock %}

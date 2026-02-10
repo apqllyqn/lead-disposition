@@ -95,10 +95,16 @@ async def page_contact_detail(request: Request, email: str, client_id: str):
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
     allowed = TRANSITION_MAP.get(contact.disposition_status.value, [])
+    # Resolve client name for display
+    row = await db.pool.fetchrow(
+        "SELECT name FROM public.clients WHERE id = $1::uuid", client_id
+    )
+    client_name = row["name"] if row and row["name"] else client_id
     return templates.TemplateResponse("contact_detail.html", {
         "request": request,
         "contact": contact,
         "allowed_transitions": allowed,
+        "client_name": client_name,
     })
 
 
@@ -278,6 +284,60 @@ async def api_transfer_ownership(domain: str, new_client_id: str = Query(...)):
 async def api_clients():
     clients = await db.get_distinct_clients()
     return {"items": clients}
+
+
+@app.get("/api/charm/clients")
+async def api_charm_clients():
+    """List all Charm clients with their names (from public.clients table)."""
+    rows = await db.pool.fetch(
+        "SELECT id, name FROM public.clients ORDER BY name ASC"
+    )
+    return {
+        "items": [
+            {"id": str(r["id"]), "name": r["name"] or str(r["id"])}
+            for r in rows
+        ]
+    }
+
+
+@app.get("/api/charm/strategies")
+async def api_charm_strategies(client_id: str | None = Query(None)):
+    """List approved strategy suggestions for campaign fill dropdown."""
+    if client_id:
+        rows = await db.pool.fetch(
+            """
+            SELECT ss.id, ss.subject_line, ss.campaign_type, ss.variant_number,
+                   c.name as client_name
+            FROM public.strategy_suggestions ss
+            JOIN public.clients c ON ss.client_id = c.id
+            WHERE ss.status = 'approved' AND ss.client_id = $1::uuid
+            ORDER BY ss.created_at DESC
+            """,
+            client_id,
+        )
+    else:
+        rows = await db.pool.fetch(
+            """
+            SELECT ss.id, ss.subject_line, ss.campaign_type, ss.variant_number,
+                   c.name as client_name, ss.client_id
+            FROM public.strategy_suggestions ss
+            JOIN public.clients c ON ss.client_id = c.id
+            WHERE ss.status = 'approved'
+            ORDER BY ss.created_at DESC
+            LIMIT 50
+            """
+        )
+    return {
+        "items": [
+            {
+                "id": str(r["id"]),
+                "label": f"V{r['variant_number']} — {r['subject_line'][:60]}",
+                "campaign_type": r["campaign_type"],
+                "client_name": r["client_name"],
+            }
+            for r in rows
+        ]
+    }
 
 
 @app.post("/api/maintenance/cooldowns")
