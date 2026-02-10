@@ -454,12 +454,12 @@ class PostgresDatabase:
         # Build title filter
         title_clause = ""
         title_params: list[Any] = []
-        param_idx = 5  # $1=client_id, $2=now, $3=client_id, $4=stale_cutoff
+        param_idx = 4  # $1=client_id, $2=now, $3=client_id, $4=stale_cutoff
         if title_keywords:
             conditions = []
             for kw in title_keywords:
                 param_idx += 1
-                conditions.append(f"LOWER(c.last_known_title) LIKE ${param_idx}")
+                conditions.append(f"LOWER(c.last_known_title) LIKE ${param_idx}::text")
                 title_params.append(f"%{kw.lower()}%")
             title_clause = "AND (" + " OR ".join(conditions) + ")"
 
@@ -468,11 +468,11 @@ class PostgresDatabase:
         status_params: list[Any] = []
         for s in statuses:
             param_idx += 1
-            status_placeholders.append(f"${param_idx}")
+            status_placeholders.append(f"${param_idx}::text")
             status_params.append(s)
 
         param_idx += 1
-        limit_param = f"${param_idx}"
+        limit_param = f"${param_idx}::int"
 
         query = f"""
             SELECT c.* FROM contacts c
@@ -487,7 +487,7 @@ class PostgresDatabase:
             AND (c.data_enriched_at IS NULL OR c.data_enriched_at > $4)
             {title_clause}
             ORDER BY
-                CASE WHEN c.disposition_status = 'fresh' THEN 0 ELSE 1 END,
+                CASE WHEN c.disposition_status::text = 'fresh' THEN 0 ELSE 1 END,
                 c.data_enriched_at DESC NULLS LAST,
                 c.sequence_count ASC
             LIMIT {limit_param}
